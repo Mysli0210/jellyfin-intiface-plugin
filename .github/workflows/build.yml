@@ -1,0 +1,45 @@
+name: Build Plugin
+
+on:
+  push:
+    branches:
+      - intiface-integration
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Find plugin output
+        run: |
+          find . -type f -name "*.dll" -path "*/bin/Release/*" -print > artifact_paths.txt || true
+          cat artifact_paths.txt || true
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: jellyfin-intiface-plugin
+          path: |
+            **/bin/Release/**
