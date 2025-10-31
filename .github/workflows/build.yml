@@ -1,3 +1,4 @@
+# url=https://github.com/Mysli0210/jellyfin-intiface-plugin/blob/intiface-integration/.github/workflows/build.yml
 name: Build Plugin
 
 on:
@@ -11,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v3
@@ -34,12 +35,30 @@ jobs:
 
       - name: Find plugin output
         run: |
+          # list all dlls built into bin/Release
           find . -type f -name "*.dll" -path "*/bin/Release/*" -print > artifact_paths.txt || true
           cat artifact_paths.txt || true
 
+      - name: Package plugin folder(s)
+        run: |
+          # Create a zip containing all artifacts under bin/Release for easy download
+          mkdir -p artifacts
+          # Copy all build outputs (you can adjust the pattern if your csproj structure differs)
+          while IFS= read -r file; do
+            dir="$(dirname "$file")"
+            # copy the entire containing folder (dll + deps) preserving structure under artifacts/
+            dest="artifacts/$(echo "$dir" | sed 's#^\./##' )"
+            mkdir -p "$dest"
+            cp -r "$dir"/* "$dest"/ || true
+          done < artifact_paths.txt || true
+          # Zip artifacts
+          zip -r jellyfin-intiface-plugin-build.zip artifacts || true
+          ls -la
+
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: jellyfin-intiface-plugin
           path: |
-            **/bin/Release/**
+            jellyfin-intiface-plugin-build.zip
+            artifacts/**
