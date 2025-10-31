@@ -21,4 +21,6 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public string ConnectionKey { get; set; }
 
+    public string? TimeServerUri { get; set; }
+
 }
