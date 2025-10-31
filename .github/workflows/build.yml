@@ -1,4 +1,3 @@
-# url=https://github.com/Mysli0210/jellyfin-intiface-plugin/blob/intiface-integration/.github/workflows/build.yml
 name: Build Plugin
 
 on:
@@ -19,39 +18,60 @@ jobs:
         with:
           dotnet-version: '6.0.x'
 
+      - name: Find plugin project
+        id: findproj
+        run: |
+          echo "Searching for .csproj files..."
+          # Prefer TheHandyPlugin csproj if present
+          if [ -f "TheHandyPlugin/TheHandyPlugin.csproj" ]; then
+            echo "project=TheHandyPlugin/TheHandyPlugin.csproj" >> $GITHUB_OUTPUT
+          else
+            # fallback: find the first .csproj in the repo
+            proj=$(find . -maxdepth 3 -type f -name '*.csproj' | head -n 1 || true)
+            if [ -z "$proj" ]; then
+              echo "No .csproj found in repo"
+              exit 1
+            fi
+            # trim leading ./ if present
+            proj=${proj#./}
+            echo "project=$proj" >> $GITHUB_OUTPUT
+          fi
+          echo "Using project: $PROJECT"
+      - name: Show picked project
+        run: |
+          echo "Picked project: ${{ steps.findproj.outputs.project }}"
+
       - name: Cache NuGet packages
         uses: actions/cache@v3
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles( '${{ steps.findproj.outputs.project }}' ) }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore "${{ steps.findproj.outputs.project }}"
 
       - name: Build
-        run: dotnet build --configuration Release
+        run: dotnet build "${{ steps.findproj.outputs.project }}" --configuration Release --no-restore
 
-      - name: Find plugin output
+      - name: Find build outputs
         run: |
-          # list all dlls built into bin/Release
-          find . -type f -name "*.dll" -path "*/bin/Release/*" -print > artifact_paths.txt || true
+          # find dll outputs for packaging
+          find . -type f -path "*/bin/Release/*" -name "*.dll" -print > artifact_paths.txt || true
           cat artifact_paths.txt || true
 
       - name: Package plugin folder(s)
         run: |
-          # Create a zip containing all artifacts under bin/Release for easy download
           mkdir -p artifacts
-          # Copy all build outputs (you can adjust the pattern if your csproj structure differs)
-          while IFS= read -r file; do
-            dir="$(dirname "$file")"
-            # copy the entire containing folder (dll + deps) preserving structure under artifacts/
-            dest="artifacts/$(echo "$dir" | sed 's#^\./##' )"
-            mkdir -p "$dest"
-            cp -r "$dir"/* "$dest"/ || true
-          done < artifact_paths.txt || true
-          # Zip artifacts
+          if [ -s artifact_paths.txt ]; then
+            while IFS= read -r file; do
+              dir="$(dirname "$file")"
+              dest="artifacts/$(echo "$dir" | sed 's#^\./##')"
+              mkdir -p "$dest"
+              cp -r "$dir"/* "$dest"/ || true
+            done < artifact_paths.txt
+          fi
           zip -r jellyfin-intiface-plugin-build.zip artifacts || true
           ls -la
 
