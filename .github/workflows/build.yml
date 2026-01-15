@@ -1,84 +1,41 @@
-name: Build Plugin
+name: Build and publish plugin
 
 on:
   push:
-    branches:
-      - intiface-integration
+    branches: [ intiface-integration ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up .NET SDK
+      - name: Setup .NET 6
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '6.0.x'
 
-      - name: Find plugin project
-        id: findproj
+      - name: Disable dotnet telemetry
         run: |
-          echo "Searching for .csproj files..."
-          # Prefer TheHandyPlugin csproj if present
-          if [ -f "TheHandyPlugin/TheHandyPlugin.csproj" ]; then
-            echo "project=TheHandyPlugin/TheHandyPlugin.csproj" >> $GITHUB_OUTPUT
-          else
-            # fallback: find the first .csproj in the repo
-            proj=$(find . -maxdepth 3 -type f -name '*.csproj' | head -n 1 || true)
-            if [ -z "$proj" ]; then
-              echo "No .csproj found in repo"
-              exit 1
-            fi
-            # trim leading ./ if present
-            proj=${proj#./}
-            echo "project=$proj" >> $GITHUB_OUTPUT
-          fi
-          echo "Using project: $PROJECT"
-      - name: Show picked project
-        run: |
-          echo "Picked project: ${{ steps.findproj.outputs.project }}"
+          echo "DOTNET_CLI_TELEMETRY_OPTOUT=1" >> $GITHUB_ENV
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles( '${{ steps.findproj.outputs.project }}' ) }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+      - name: Restore
+        run: dotnet restore TheHandyPlugin/TheHandyPlugin.csproj
 
-      - name: Restore dependencies
-        run: dotnet restore "${{ steps.findproj.outputs.project }}"
+      - name: Build (Release)
+        run: dotnet build TheHandyPlugin/TheHandyPlugin.csproj --configuration Release --no-restore
 
-      - name: Build
-        run: dotnet build "${{ steps.findproj.outputs.project }}" --configuration Release --no-restore
+      - name: Publish
+        run: dotnet publish TheHandyPlugin/TheHandyPlugin.csproj --configuration Release --no-build -o ./output
 
-      - name: Find build outputs
-        run: |
-          # find dll outputs for packaging
-          find . -type f -path "*/bin/Release/*" -name "*.dll" -print > artifact_paths.txt || true
-          cat artifact_paths.txt || true
+      - name: List output files
+        run: ls -la ./output || true
 
-      - name: Package plugin folder(s)
-        run: |
-          mkdir -p artifacts
-          if [ -s artifact_paths.txt ]; then
-            while IFS= read -r file; do
-              dir="$(dirname "$file")"
-              dest="artifacts/$(echo "$dir" | sed 's#^\./##')"
-              mkdir -p "$dest"
-              cp -r "$dir"/* "$dest"/ || true
-            done < artifact_paths.txt
-          fi
-          zip -r jellyfin-intiface-plugin-build.zip artifacts || true
-          ls -la
-
-      - name: Upload Build Artifact
+      - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jellyfin-intiface-plugin
-          path: |
-            jellyfin-intiface-plugin-build.zip
-            artifacts/**
+          name: jellyfin-thehandy-plugin
+          path: ./output
