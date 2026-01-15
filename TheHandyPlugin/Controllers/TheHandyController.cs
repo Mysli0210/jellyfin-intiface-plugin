@@ -1,6 +1,11 @@
-using System;
+using System.IO;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Controller; // adjust if namespace differs
+using Jellyfin.Controller.Entities; // adjust
+using Jellyfin.Controller.Library; // adjust - for ILibraryManager
+using MediaBrowser.Model.Entities; // BaseItem
+// NOTE: you might need to adjust using statements to match your project references
 
 namespace Jellyfin.TheHandy.Controllers
 {
@@ -9,44 +14,60 @@ namespace Jellyfin.TheHandy.Controllers
     public class TheHandyController : ControllerBase
     {
         private readonly ILogger<TheHandyController> _logger;
+        private readonly ILibraryManager _libraryManager; // or another service used to resolve items
 
-        public TheHandyController(ILogger<TheHandyController> logger)
+        public TheHandyController(ILogger<TheHandyController> logger, ILibraryManager libraryManager)
         {
             _logger = logger;
+            _libraryManager = libraryManager;
         }
 
-        // Client-side JS calls this endpoint before playback to provide per-client ws/user/pass.
-        // The request should include:
-        //   X-Intiface-WS: ws://host:port
-        //   X-Intiface-User: username (optional)
-        //   X-Intiface-Pass: password (optional)
-        // The server will register these headers against a short-lived request id and return 204.
-        [HttpPost("IntifaceClientPing/{itemId}")]
-        public IActionResult IntifaceClientPing(string itemId)
+        // GET /TheHandy/HasFunscript/{itemId}
+        [HttpGet("HasFunscript/{itemId}")]
+        public IActionResult HasFunscript(string itemId)
         {
+            if (string.IsNullOrWhiteSpace(itemId))
+                return NotFound();
+
+            // Try to fetch the item from the library
+            var item = _libraryManager?.GetItemById(itemId); // method name may vary; adjust to actual API
+            if (item == null)
+            {
+                _logger?.LogDebug("HasFunscript: item not found for id {ItemId}", itemId);
+                return NotFound();
+            }
+
+            // Attempt to get a local path. Many items expose a Path or MediaSources. Adjust as needed.
+            string mediaPath = null;
             try
             {
-                // Create request id and store the headers in plugin pending map
-                var requestId = Guid.NewGuid().ToString();
-                var ws = Request.Headers.ContainsKey("X-Intiface-WS") ? Request.Headers["X-Intiface-WS"].ToString() : null;
-                var user = Request.Headers.ContainsKey("X-Intiface-User") ? Request.Headers["X-Intiface-User"].ToString() : null;
-                var pass = Request.Headers.ContainsKey("X-Intiface-Pass") ? Request.Headers["X-Intiface-Pass"].ToString() : null;
-
-                // Register in plugin for the next playback request (plugin will look up by X-Intiface-Request-Id)
-                if (!string.IsNullOrWhiteSpace(ws) && TheHandyPlugin.Instance != null)
-                {
-                    TheHandyPlugin.Instance.RegisterPendingRequestHeaders(requestId, ws, user, pass);
-                    // Return the request id to the client so it can include X-Intiface-Request-Id on playback calls.
-                    Response.Headers["X-Intiface-Request-Id"] = requestId;
-                }
-
-                return NoContent();
+                mediaPath = item.Path; // adjust if property is different; otherwise inspect item.MediaSources to find local path
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "IntifaceClientPing failed");
-                return StatusCode(500);
+                // Fallback: inspect MediaSources
+                try
+                {
+                    var ms = item.GetPrimaryMediaSource(); // pseudo; adjust to real call if available
+                    mediaPath = ms?.Path;
+                }
+                catch { mediaPath = null; }
             }
+
+            if (string.IsNullOrWhiteSpace(mediaPath))
+            {
+                _logger?.LogDebug("HasFunscript: no local path found for item {ItemId}", itemId);
+                return NotFound();
+            }
+
+            var funscriptPath = Path.ChangeExtension(mediaPath, ".funscript");
+            var exists = System.IO.File.Exists(funscriptPath);
+            _logger?.LogInformation("HasFunscript: checking {FunscriptPath} -> exists={Exists}", funscriptPath, exists);
+            return exists ? Ok() : NotFound();
         }
+
+        // Optional: implement IntifaceClientPing/{itemId} if you want the server to create/return request id
+        // [HttpPost("IntifaceClientPing/{itemId}")]
+        // public IActionResult IntifaceClientPing(string itemId) { ... }
     }
 }
