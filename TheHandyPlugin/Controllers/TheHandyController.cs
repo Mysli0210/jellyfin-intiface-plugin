@@ -2,8 +2,8 @@ using System;
 using System.IO;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
 
 namespace Jellyfin.TheHandy.Controllers
 {
@@ -29,7 +29,7 @@ namespace Jellyfin.TheHandy.Controllers
 
             try
             {
-                // Try to resolve item by id
+                // Resolve item by id
                 BaseItem item = _libraryManager?.GetItemById(itemId);
                 if (item == null)
                 {
@@ -40,14 +40,12 @@ namespace Jellyfin.TheHandy.Controllers
                 // Prefer the explicit Path if present
                 string mediaPath = item.Path;
 
-                // If no Path property, we cannot determine local file; treat as not found
                 if (string.IsNullOrWhiteSpace(mediaPath))
                 {
                     _logger?.LogDebug("HasFunscript: no local path for item {ItemId}", itemId);
                     return NotFound();
                 }
 
-                // Look for a .funscript sidecar with the same base name
                 var funscriptPath = Path.ChangeExtension(mediaPath, ".funscript");
                 var exists = System.IO.File.Exists(funscriptPath);
                 _logger?.LogInformation("HasFunscript: checking {FunscriptPath} -> exists={Exists} for item {ItemId}", funscriptPath, exists, itemId);
