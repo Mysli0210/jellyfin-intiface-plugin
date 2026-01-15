@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RuleSet Name="JellyfinRules" Description="Minimal ruleset for Jellyfin plugin builds" ToolsVersion="16.0">
+  <!-- Minimal/empty ruleset to satisfy CodeAnalysisRuleSet reference in the csproj.
+       Extend this file with rule entries if you want to enforce specific analyzers. -->
+  <Rules AnalyzerId="Microsoft.CodeAnalysis.CSharp" RuleNamespace="Microsoft.CodeAnalysis.CSharp" />
+</RuleSet>
