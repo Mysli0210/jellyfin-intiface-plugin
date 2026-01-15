@@ -1,6 +1,6 @@
 using Jellyfin.TheHandy.Notifiers;
-using MediaBrowser.Common.Plugins;
-using MediaBrowser.Common.Updates;
+using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Authentication;
 using MediaBrowser.Controller.Events;
 using MediaBrowser.Controller.Events.Session;
@@ -19,9 +19,8 @@ namespace Jellyfin.TheHandy;
 public class PluginServiceRegistrator : IPluginServiceRegistrator
 {
     /// <inheritdoc />
-    public void RegisterServices(IServiceCollection serviceCollection)
+    public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
-        
         // Session consumers.
         // serviceCollection.AddScoped<IEventConsumer<PlaybackStartEventArgs>, PlaybackStartNotifier>();
         // serviceCollection.AddScoped<IEventConsumer<PlaybackStopEventArgs>, PlaybackStopNotifier>();
